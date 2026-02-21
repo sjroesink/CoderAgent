@@ -652,6 +652,23 @@ tr.clickable:hover { background: rgba(59, 130, 246, 0.05); }
   white-space: nowrap;
 }
 
+/* Source toggle (Local / GitHub) */
+.source-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.source-toggle .btn {
+  flex: 1;
+  justify-content: center;
+}
+
+.source-toggle .btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* Flex utils */
 .flex-between {
   display: flex;

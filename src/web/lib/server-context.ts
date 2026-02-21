@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { SessionManager } from "../../core/services/session-manager";
 import { StatusSummarizer } from "../../core/services/status-summarizer";
 import { GlobalChannelService } from "../../core/services/global-channel-service";
+import { GitHubService } from "../../core/services/github-service";
 
 // Use globalThis to share singletons between the custom server (server.ts) and
 // Next.js bundled API routes, which resolve module scope independently.
@@ -13,6 +14,7 @@ const g = globalThis as unknown as {
   _sessionManager?: SessionManager;
   _statusSummarizer?: StatusSummarizer;
   _globalChannelService?: GlobalChannelService;
+  _githubService?: GitHubService;
 };
 
 export function initDb(): Db {
@@ -30,9 +32,15 @@ export function initDb(): Db {
       no_pr INTEGER NOT NULL DEFAULT 0,
       pr_url TEXT,
       backend_type TEXT NOT NULL DEFAULT 'copilot',
+      github_repo TEXT,
+      base_branch TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
+
+    // Add new columns to existing databases (safe: IF NOT EXISTS-style via pragma)
+    try { g._db.run(sql`ALTER TABLE sessions ADD COLUMN github_repo TEXT`); } catch {}
+    try { g._db.run(sql`ALTER TABLE sessions ADD COLUMN base_branch TEXT`); } catch {}
 
     g._db.run(sql`CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -85,6 +93,13 @@ export function getGlobalChannelService(): GlobalChannelService {
     g._globalChannelService = new GlobalChannelService(initDb());
   }
   return g._globalChannelService;
+}
+
+export function getGitHubService(): GitHubService {
+  if (!g._githubService) {
+    g._githubService = new GitHubService(process.env.WORKSPACES_ROOT ?? "/data/workspaces");
+  }
+  return g._githubService;
 }
 
 export function getIO(): SocketIOServer | null {

@@ -12,6 +12,8 @@ export const sessions = sqliteTable(
     noPr: integer("no_pr", { mode: "boolean" }).notNull().default(false),
     prUrl: text("pr_url"),
     backendType: text("backend_type").notNull().default("copilot"),
+    githubRepo: text("github_repo"), // e.g. "owner/repo"
+    baseBranch: text("base_branch"), // the branch the user selected to branch off from
     createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
     updatedAt: text("updated_at").notNull().$defaultFn(() => new Date().toISOString()),
   },

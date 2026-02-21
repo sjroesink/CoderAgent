@@ -33,6 +33,9 @@ RUN npm install -g tsx
 # Copy built artifacts from builder stage
 COPY --from=builder /app/dist ./dist
 
+# Next.js needs TypeScript at runtime to load next.config.ts
+COPY --from=builder /app/node_modules/typescript ./node_modules/typescript
+
 # Copy source (needed for server.ts entrypoint and Next.js config resolution)
 COPY src ./src
 

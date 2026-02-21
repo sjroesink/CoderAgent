@@ -1,5 +1,6 @@
-import { Telegraf, message } from "telegraf";
+import { Telegraf } from "telegraf";
 import type { IChannel } from "./channel";
+import {message} from "telegraf/filters";
 
 export interface TelegramChannelOptions {
   botToken: string;

@@ -5,18 +5,22 @@ import { SessionManager } from "../../core/services/session-manager";
 import { StatusSummarizer } from "../../core/services/status-summarizer";
 import { GlobalChannelService } from "../../core/services/global-channel-service";
 
-let _db: Db | null = null;
-let _io: SocketIOServer | null = null;
-let _sessionManager: SessionManager | null = null;
-let _statusSummarizer: StatusSummarizer | null = null;
-let _globalChannelService: GlobalChannelService | null = null;
+// Use globalThis to share singletons between the custom server (server.ts) and
+// Next.js bundled API routes, which resolve module scope independently.
+const g = globalThis as unknown as {
+  _db?: Db;
+  _io?: SocketIOServer;
+  _sessionManager?: SessionManager;
+  _statusSummarizer?: StatusSummarizer;
+  _globalChannelService?: GlobalChannelService;
+};
 
 export function initDb(): Db {
-  if (!_db) {
-    _db = createDb("agentcoder.db");
+  if (!g._db) {
+    g._db = createDb(process.env.DATABASE_PATH ?? "agentcoder.db");
 
     // Ensure tables exist
-    _db.run(sql`CREATE TABLE IF NOT EXISTS sessions (
+    g._db.run(sql`CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
       task TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'Created',
@@ -30,7 +34,7 @@ export function initDb(): Db {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
 
-    _db.run(sql`CREATE TABLE IF NOT EXISTS messages (
+    g._db.run(sql`CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id TEXT NOT NULL REFERENCES sessions(id),
       sender TEXT NOT NULL DEFAULT '',
@@ -40,7 +44,7 @@ export function initDb(): Db {
       timestamp TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
 
-    _db.run(sql`CREATE TABLE IF NOT EXISTS session_channels (
+    g._db.run(sql`CREATE TABLE IF NOT EXISTS session_channels (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id TEXT NOT NULL REFERENCES sessions(id),
       channel_type TEXT NOT NULL DEFAULT '',
@@ -49,7 +53,7 @@ export function initDb(): Db {
       added_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
 
-    _db.run(sql`CREATE TABLE IF NOT EXISTS global_channels (
+    g._db.run(sql`CREATE TABLE IF NOT EXISTS global_channels (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       channel_type TEXT NOT NULL DEFAULT '',
       name TEXT NOT NULL DEFAULT '',
@@ -59,34 +63,34 @@ export function initDb(): Db {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
   }
-  return _db;
+  return g._db;
 }
 
 export function getSessionManager(): SessionManager {
-  if (!_sessionManager) {
-    _sessionManager = new SessionManager(initDb());
+  if (!g._sessionManager) {
+    g._sessionManager = new SessionManager(initDb());
   }
-  return _sessionManager;
+  return g._sessionManager;
 }
 
 export function getStatusSummarizer(): StatusSummarizer {
-  if (!_statusSummarizer) {
-    _statusSummarizer = new StatusSummarizer(initDb());
+  if (!g._statusSummarizer) {
+    g._statusSummarizer = new StatusSummarizer(initDb());
   }
-  return _statusSummarizer;
+  return g._statusSummarizer;
 }
 
 export function getGlobalChannelService(): GlobalChannelService {
-  if (!_globalChannelService) {
-    _globalChannelService = new GlobalChannelService(initDb());
+  if (!g._globalChannelService) {
+    g._globalChannelService = new GlobalChannelService(initDb());
   }
-  return _globalChannelService;
+  return g._globalChannelService;
 }
 
 export function getIO(): SocketIOServer | null {
-  return _io;
+  return g._io ?? null;
 }
 
 export function setIO(io: SocketIOServer): void {
-  _io = io;
+  g._io = io;
 }

@@ -51,10 +51,11 @@ app.prepare().then(() => {
     io.emit("sessionListUpdated");
   });
 
-  sessionManager.on("messagePersisted", (sessionId: string, sender: string, content: string, messageType: string) => {
+  sessionManager.on("messagePersisted", (sessionId: string, channelType: string, sender: string, content: string, messageType: string) => {
     io.to(sessionId).emit("receiveMessage", {
       sender,
       message: content,
+      channelType,
       messageType,
       timestamp: new Date().toISOString(),
     });

@@ -80,6 +80,8 @@ body {
   flex: 1;
   padding: 2rem;
   max-width: 1200px;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* Common components */
@@ -256,7 +258,9 @@ tr.clickable:hover { background: rgba(59, 130, 246, 0.05); }
 }
 
 .message-user .message-time {
-  float: left;
+  margin-left: 0;
+  margin-right: auto;
+  order: -1;
 }
 
 .message-status {
@@ -277,6 +281,9 @@ tr.clickable:hover { background: rgba(59, 130, 246, 0.05); }
 }
 
 .message-sender {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   font-weight: 600;
   font-size: 0.8rem;
   margin-bottom: 0.35rem;
@@ -290,7 +297,7 @@ tr.clickable:hover { background: rgba(59, 130, 246, 0.05); }
 .message-time {
   font-size: 0.7rem;
   color: var(--text-muted);
-  float: right;
+  margin-left: auto;
   font-weight: 400;
 }
 

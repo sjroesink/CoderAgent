@@ -83,6 +83,11 @@ export class SessionManager extends EventEmitter {
       throw new Error(`Session ${sessionId} not found.`);
     }
 
+    // Check if already active
+    if (this.activeSessions.has(sessionId)) {
+      throw new Error(`Session ${sessionId} is already running.`);
+    }
+
     await this.updateSessionStatus(sessionId, "Initializing");
 
     const orchestrator = new AgentOrchestrator(
@@ -150,7 +155,7 @@ export class SessionManager extends EventEmitter {
       .set({ updatedAt: new Date().toISOString() })
       .where(eq(sessions.id, sessionId));
 
-    this.emit("messagePersisted", sessionId, sender, content, messageType);
+    this.emit("messagePersisted", sessionId, channelType, sender, content, messageType);
   }
 
   sendUserMessage(sessionId: string, message: string): void {

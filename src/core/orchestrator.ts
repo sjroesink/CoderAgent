@@ -260,13 +260,18 @@ Format it as markdown suitable for a GitHub PR body.`,
       ? `\n\n## Project Context (from CLAUDE.md)\n\n${fs.readFileSync(claudeMdPath, "utf-8")}`
       : "";
 
+    const channelTypes = this.multiChannel.channels.map((c) => c.channelType);
+    const channelInfo = channelTypes.length > 0
+      ? `\n\n## Available Channels\n\nYour messages are broadcast to the following channels: ${channelTypes.join(", ")}.\nAll channels are fully configured and active. When you send a message, it is delivered to all channels automatically.`
+      : "";
+
     return `You are a skilled software engineer working on a codebase.
 You can read and write files, execute shell commands, and use git.
 Always follow existing coding conventions in the project.
 When you make changes, explain what you did and why.
 If you encounter errors, debug them and try to fix them.
 Use the filesystem tools to explore and modify the codebase.
-${projectContext}`;
+${projectContext}${channelInfo}`;
   }
 
   private ensureInitialized(): void {

@@ -9,9 +9,10 @@ RUN apk add --no-cache python3 make g++
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Copy source and build (tsup + next build)
+# Copy source and build (tsup without DTS + next build)
+# --no-dts: type declarations are not needed to run the application
 COPY . .
-RUN npm run build
+RUN npx tsup --no-dts && npm run build:web
 
 # ===== Stage 2: Production =====
 FROM node:22-alpine AS runner
@@ -35,9 +36,12 @@ COPY --from=builder /app/dist ./dist
 # Copy source (needed for server.ts entrypoint and Next.js config resolution)
 COPY src ./src
 
-# Mount database here for persistence:
-#   docker run -v agentcoder-data:/app/agentcoder.db ...
-VOLUME ["/app/agentcoder.db"]
+# Data directory for SQLite database
+# Mount a volume here for persistence:
+#   docker run -v agentcoder-data:/data ...
+RUN mkdir -p /data
+ENV DATABASE_PATH=/data/agentcoder.db
+VOLUME ["/data"]
 
 EXPOSE 4555
 

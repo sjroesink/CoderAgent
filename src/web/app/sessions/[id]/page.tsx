@@ -22,6 +22,7 @@ interface Message {
   sender: string;
   message?: string;
   content?: string;
+  channelType?: string;
   messageType: string;
   timestamp: string;
 }
@@ -157,6 +158,22 @@ export default function SessionDetailPage() {
     setInput("");
   };
 
+  const restartSession = async () => {
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        await fetchSession();
+      } else {
+        const err = await res.json();
+        alert(`Failed to restart session: ${err.error}`);
+      }
+    } catch (err: any) {
+      alert(`Failed to restart session: ${err.message}`);
+    }
+  };
+
   if (!session) return <div>Loading...</div>;
 
   const statusBadge = session.status.toLowerCase();
@@ -221,16 +238,22 @@ export default function SessionDetailPage() {
           </div>
         </div>
 
-        {session.isActive && (
-          <div className="quick-actions">
-            <button className="btn btn-secondary btn-sm" onClick={() => sendMessage("status")}>
-              Status
+        <div className="quick-actions">
+          {session.isActive ? (
+            <>
+              <button className="btn btn-secondary btn-sm" onClick={() => sendMessage("status")}>
+                Status
+              </button>
+              <button className="btn btn-danger btn-sm" onClick={() => sendMessage("stop")}>
+                Stop
+              </button>
+            </>
+          ) : (
+            <button className="btn btn-primary btn-sm" onClick={restartSession}>
+              Restart Session
             </button>
-            <button className="btn btn-danger btn-sm" onClick={() => sendMessage("stop")}>
-              Stop
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="chat-container">
@@ -240,6 +263,9 @@ export default function SessionDetailPage() {
             return (
               <div key={i} className={messageClass(msg.messageType, msg.sender)}>
                 <div className="message-sender">
+                  {msg.channelType && msg.channelType !== "WebUI" && (
+                    <ChannelIcon channelType={msg.channelType} size={14} />
+                  )}
                   {msg.sender}
                   <span className="message-time">
                     {new Date(msg.timestamp).toLocaleTimeString()}

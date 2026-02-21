@@ -1,0 +1,24 @@
+{
+  "specVersion": "1.1",
+  "threadId": "2a39083a-997f-4b09-ab85-d87763b2cbfd",
+  "title": "Session 0764ef88",
+  "createdAt": "2026-02-21T10:41:09.938Z",
+  "updatedAt": "2026-02-21T10:41:38.667Z",
+  "agent": {
+    "id": "opencode",
+    "name": "OpenCode",
+    "protocol": "acp"
+  },
+  "context": {
+    "workingDir": "D:\\Projects\\AgentCoder"
+  },
+  "stats": {
+    "messageCount": 2,
+    "userMessageCount": 1,
+    "agentMessageCount": 1,
+    "toolCallCount": 17
+  },
+  "metadata": {
+    "interactionMode": "build"
+  }
+}

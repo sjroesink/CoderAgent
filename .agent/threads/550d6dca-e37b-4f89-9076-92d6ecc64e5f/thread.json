@@ -1,0 +1,21 @@
+{
+  "specVersion": "1.1",
+  "threadId": "550d6dca-e37b-4f89-9076-92d6ecc64e5f",
+  "title": "Web UI agent messaging feature implementation",
+  "createdAt": "2026-02-21T19:41:25.834Z",
+  "updatedAt": "2026-02-21T19:56:09.740Z",
+  "agent": {
+    "id": "claude-code-acp",
+    "name": "@zed-industries/claude-code-acp",
+    "protocol": "acp"
+  },
+  "context": {
+    "workingDir": "D:\\Projects\\AgentCoder"
+  },
+  "stats": {
+    "messageCount": 8,
+    "userMessageCount": 4,
+    "agentMessageCount": 4,
+    "toolCallCount": 78
+  }
+}

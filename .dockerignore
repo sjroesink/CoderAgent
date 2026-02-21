@@ -1,0 +1,31 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Next.js cache
+src/web/.next
+src/web/tsconfig.tsbuildinfo
+
+# IDE and tooling
+.idea
+.vscode
+.claude
+.agent
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Drizzle migrations output (generated, not source)
+# drizzle/
+
+# Logs
+*.log
+npm-debug.log*

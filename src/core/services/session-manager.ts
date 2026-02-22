@@ -19,6 +19,10 @@ export interface SessionCreateRequest {
   noPr: boolean;
   backendType: AgentBackendType;
   channels: ChannelRequest[];
+  /** GitHub repo in "owner/repo" format (cloud/Docker mode). */
+  githubRepo?: string;
+  /** Base branch to create the coderagent/* branch from. */
+  baseBranch?: string;
 }
 
 export interface ChannelRequest {
@@ -53,6 +57,8 @@ export class SessionManager extends EventEmitter {
       autoApprove: request.autoApprove,
       noPr: request.noPr,
       backendType: request.backendType,
+      githubRepo: request.githubRepo,
+      baseBranch: request.baseBranch,
       status: "Created",
     });
 
@@ -222,6 +228,13 @@ export class SessionManager extends EventEmitter {
       .select()
       .from(sessionChannels)
       .where(eq(sessionChannels.sessionId, sessionId));
+  }
+
+  async updatePrUrl(sessionId: string, prUrl: string): Promise<void> {
+    await this.db
+      .update(sessions)
+      .set({ prUrl, updatedAt: new Date().toISOString() })
+      .where(eq(sessions.id, sessionId));
   }
 
   async waitForSession(sessionId: string): Promise<void> {

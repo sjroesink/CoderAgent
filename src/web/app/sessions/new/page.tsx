@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 interface GlobalChannel {
@@ -11,9 +11,24 @@ interface GlobalChannel {
   configurationJson: string;
 }
 
+interface GitHubRepo {
+  nameWithOwner: string;
+  description: string;
+  url: string;
+  isPrivate: boolean;
+  defaultBranch: string;
+}
+
+interface GitHubBranch {
+  name: string;
+}
+
+type RepoSource = "local" | "github";
+
 export default function NewSessionPage() {
   const router = useRouter();
   const [task, setTask] = useState("");
+  const [repoSource, setRepoSource] = useState<RepoSource>("local");
   const [repoPath, setRepoPath] = useState("");
   const [branch, setBranch] = useState("");
   const [autoApprove, setAutoApprove] = useState(false);
@@ -24,11 +39,91 @@ export default function NewSessionPage() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // GitHub-specific state
+  const [ghAuthenticated, setGhAuthenticated] = useState<boolean | null>(null);
+  const [ghUsername, setGhUsername] = useState<string>("");
+  const [ghRepos, setGhRepos] = useState<GitHubRepo[]>([]);
+  const [ghReposLoading, setGhReposLoading] = useState(false);
+  const [ghSelectedRepo, setGhSelectedRepo] = useState<string>("");
+  const [ghRepoSearch, setGhRepoSearch] = useState("");
+  const [ghBranches, setGhBranches] = useState<GitHubBranch[]>([]);
+  const [ghBranchesLoading, setGhBranchesLoading] = useState(false);
+  const [ghSelectedBranch, setGhSelectedBranch] = useState<string>("");
+
+  // Fetch global channels
   useEffect(() => {
     fetch("/api/channels")
       .then((r) => r.json())
       .then((data) => setGlobalChannels(data.filter((c: GlobalChannel) => c.isEnabled)));
   }, []);
+
+  // Check GitHub auth status on mount
+  useEffect(() => {
+    fetch("/api/github")
+      .then((r) => r.json())
+      .then((data) => {
+        setGhAuthenticated(data.authenticated);
+        if (data.username) setGhUsername(data.username);
+        if (data.authenticated) setRepoSource("github");
+      })
+      .catch(() => setGhAuthenticated(false));
+  }, []);
+
+  // Fetch repos when switching to GitHub mode
+  useEffect(() => {
+    if (repoSource === "github" && ghAuthenticated && ghRepos.length === 0) {
+      fetchRepos();
+    }
+  }, [repoSource, ghAuthenticated]);
+
+  const fetchRepos = useCallback(async (query?: string) => {
+    setGhReposLoading(true);
+    try {
+      const url = query ? `/api/github/repos?q=${encodeURIComponent(query)}` : "/api/github/repos";
+      const res = await fetch(url);
+      if (res.ok) {
+        setGhRepos(await res.json());
+      }
+    } catch {
+      // ignore
+    } finally {
+      setGhReposLoading(false);
+    }
+  }, []);
+
+  // Debounced repo search
+  useEffect(() => {
+    if (repoSource !== "github") return;
+    const timeout = setTimeout(() => {
+      fetchRepos(ghRepoSearch || undefined);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [ghRepoSearch, repoSource, fetchRepos]);
+
+  // Fetch branches when a repo is selected
+  useEffect(() => {
+    if (!ghSelectedRepo) {
+      setGhBranches([]);
+      return;
+    }
+    setGhBranchesLoading(true);
+    fetch(`/api/github/repos/${ghSelectedRepo}/branches`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setGhBranches(data);
+          // Auto-select default branch
+          const repo = ghRepos.find((r) => r.nameWithOwner === ghSelectedRepo);
+          if (repo && data.some((b: GitHubBranch) => b.name === repo.defaultBranch)) {
+            setGhSelectedBranch(repo.defaultBranch);
+          } else if (data.length > 0) {
+            setGhSelectedBranch(data[0].name);
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setGhBranchesLoading(false));
+  }, [ghSelectedRepo]);
 
   const toggleChannel = (id: number) => {
     setSelectedChannels((prev) => {
@@ -40,8 +135,23 @@ export default function NewSessionPage() {
   };
 
   const handleSubmit = async () => {
-    if (!task.trim() || !repoPath.trim()) {
-      setError("Task and Repository Path are required.");
+    if (!task.trim()) {
+      setError("Task is required.");
+      return;
+    }
+
+    if (repoSource === "local" && !repoPath.trim()) {
+      setError("Repository Path is required.");
+      return;
+    }
+
+    if (repoSource === "github" && !ghSelectedRepo) {
+      setError("Please select a GitHub repository.");
+      return;
+    }
+
+    if (repoSource === "github" && !ghSelectedBranch) {
+      setError("Please select a branch.");
       return;
     }
 
@@ -56,18 +166,26 @@ export default function NewSessionPage() {
       }));
 
     try {
+      const payload: Record<string, unknown> = {
+        task,
+        autoApprove,
+        noPr,
+        backendType,
+        globalChannels: selectedGC,
+      };
+
+      if (repoSource === "github") {
+        payload.githubRepo = ghSelectedRepo;
+        payload.baseBranch = ghSelectedBranch;
+      } else {
+        payload.repoPath = repoPath;
+        payload.branch = branch || undefined;
+      }
+
       const res = await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          task,
-          repoPath,
-          branch: branch || undefined,
-          autoApprove,
-          noPr,
-          backendType,
-          globalChannels: selectedGC,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -102,25 +220,114 @@ export default function NewSessionPage() {
           />
         </div>
 
+        {/* Repository Source Selector */}
         <div className="form-group">
-          <label>Repository Path *</label>
-          <input
-            type="text"
-            value={repoPath}
-            onChange={(e) => setRepoPath(e.target.value)}
-            placeholder="/path/to/your/repo"
-          />
+          <label>Repository Source</label>
+          <div className="source-toggle">
+            <button
+              type="button"
+              className={`btn btn-sm ${repoSource === "local" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => setRepoSource("local")}
+            >
+              Local Path
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${repoSource === "github" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => setRepoSource("github")}
+              disabled={ghAuthenticated === false}
+              title={ghAuthenticated === false ? "GitHub CLI not authenticated" : undefined}
+            >
+              GitHub {ghAuthenticated === false && "(not connected)"}
+            </button>
+          </div>
         </div>
 
-        <div className="form-group">
-          <label>Branch (optional)</label>
-          <input
-            type="text"
-            value={branch}
-            onChange={(e) => setBranch(e.target.value)}
-            placeholder="feature/my-branch"
-          />
-        </div>
+        {repoSource === "local" && (
+          <>
+            <div className="form-group">
+              <label>Repository Path *</label>
+              <input
+                type="text"
+                value={repoPath}
+                onChange={(e) => setRepoPath(e.target.value)}
+                placeholder="/path/to/your/repo"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Branch (optional)</label>
+              <input
+                type="text"
+                value={branch}
+                onChange={(e) => setBranch(e.target.value)}
+                placeholder="feature/my-branch"
+              />
+            </div>
+          </>
+        )}
+
+        {repoSource === "github" && ghAuthenticated && (
+          <>
+            <div className="form-group">
+              <label>GitHub Repository * {ghUsername && <span style={{ fontWeight: "normal", color: "var(--text-muted)" }}>({ghUsername})</span>}</label>
+              <input
+                type="text"
+                value={ghRepoSearch}
+                onChange={(e) => setGhRepoSearch(e.target.value)}
+                placeholder="Search repositories..."
+                style={{ marginBottom: "0.5rem" }}
+              />
+              {ghReposLoading ? (
+                <div style={{ color: "var(--text-muted)", padding: "0.5rem 0" }}>Loading repositories...</div>
+              ) : (
+                <select
+                  value={ghSelectedRepo}
+                  onChange={(e) => setGhSelectedRepo(e.target.value)}
+                  size={Math.min(ghRepos.length + 1, 8)}
+                  style={{ width: "100%" }}
+                >
+                  <option value="">Select a repository...</option>
+                  {ghRepos.map((repo) => (
+                    <option key={repo.nameWithOwner} value={repo.nameWithOwner}>
+                      {repo.nameWithOwner} {repo.isPrivate ? "(private)" : ""} {repo.description ? `- ${repo.description.substring(0, 60)}` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {ghSelectedRepo && (
+              <div className="form-group">
+                <label>Base Branch *</label>
+                {ghBranchesLoading ? (
+                  <div style={{ color: "var(--text-muted)", padding: "0.5rem 0" }}>Loading branches...</div>
+                ) : (
+                  <select
+                    value={ghSelectedBranch}
+                    onChange={(e) => setGhSelectedBranch(e.target.value)}
+                  >
+                    {ghBranches.map((b) => (
+                      <option key={b.name} value={b.name}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <small style={{ color: "var(--text-muted)", display: "block", marginTop: "0.25rem" }}>
+                  A new <code>coderagent/*</code> branch will be created from this branch. A draft PR will be opened automatically.
+                </small>
+              </div>
+            )}
+
+          </>
+        )}
+
+        {repoSource === "github" && ghAuthenticated === false && (
+          <div className="error">
+            GitHub CLI is not authenticated. Run <code>gh auth login</code> in the container to connect.
+          </div>
+        )}
 
         <div className="form-group">
           <label>Agent Backend</label>
@@ -142,17 +349,19 @@ export default function NewSessionPage() {
           </label>
         </div>
 
-        <div className="checkbox-group">
-          <input
-            type="checkbox"
-            id="noPr"
-            checked={noPr}
-            onChange={(e) => setNoPr(e.target.checked)}
-          />
-          <label htmlFor="noPr" style={{ margin: 0 }}>
-            Skip PR creation
-          </label>
-        </div>
+        {repoSource === "local" && (
+          <div className="checkbox-group">
+            <input
+              type="checkbox"
+              id="noPr"
+              checked={noPr}
+              onChange={(e) => setNoPr(e.target.checked)}
+            />
+            <label htmlFor="noPr" style={{ margin: 0 }}>
+              Skip PR creation
+            </label>
+          </div>
+        )}
 
         {globalChannels.length > 0 && (
           <div className="form-group">

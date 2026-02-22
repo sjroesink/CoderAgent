@@ -21,7 +21,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Build tools needed to rebuild native modules for this platform
-RUN apk add --no-cache python3 make g++
+# git: for worktree/clone operations; github-cli: for repo/PR operations
+RUN apk add --no-cache python3 make g++ git github-cli
 
 # Install production dependencies and rebuild native modules
 COPY package.json package-lock.json ./
@@ -39,11 +40,12 @@ COPY --from=builder /app/node_modules/typescript ./node_modules/typescript
 # Copy source (needed for server.ts entrypoint and Next.js config resolution)
 COPY src ./src
 
-# Data directory for SQLite database
+# Data directory for SQLite database and workspaces
 # Mount a volume here for persistence:
 #   docker run -v agentcoder-data:/data ...
-RUN mkdir -p /data
+RUN mkdir -p /data /data/workspaces
 ENV DATABASE_PATH=/data/agentcoder.db
+ENV WORKSPACES_ROOT=/data/workspaces
 VOLUME ["/data"]
 
 EXPOSE 4555

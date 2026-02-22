@@ -14,6 +14,8 @@ interface SessionDetail {
   branch: string | null;
   backendType: string;
   prUrl: string | null;
+  githubRepo: string | null;
+  baseBranch: string | null;
   isActive: boolean;
   channels: { channelType: string }[];
 }
@@ -200,14 +202,31 @@ export default function SessionDetailPage() {
               <div className="meta-label">Task</div>
               <div className="meta-value">{session.task}</div>
             </div>
+            {session.githubRepo ? (
+              <div className="meta-item">
+                <div className="meta-label">GitHub Repository</div>
+                <div className="meta-value">
+                  <a href={`https://github.com/${session.githubRepo}`} target="_blank" rel="noopener noreferrer">
+                    {session.githubRepo}
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="meta-item">
+                <div className="meta-label">Repository</div>
+                <div className="meta-value">{session.repoPath}</div>
+              </div>
+            )}
             <div className="meta-item">
-              <div className="meta-label">Repository</div>
-              <div className="meta-value">{session.repoPath}</div>
-            </div>
-            <div className="meta-item">
-              <div className="meta-label">Branch</div>
+              <div className="meta-label">{session.baseBranch ? "Working Branch" : "Branch"}</div>
               <div className="meta-value">{session.branch ?? "—"}</div>
             </div>
+            {session.baseBranch && (
+              <div className="meta-item">
+                <div className="meta-label">Base Branch</div>
+                <div className="meta-value">{session.baseBranch}</div>
+              </div>
+            )}
             <div className="meta-item">
               <div className="meta-label">Backend</div>
               <div className="meta-value">{session.backendType}</div>

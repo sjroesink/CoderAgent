@@ -1,3 +1,4 @@
+import { spawn } from "child_process";
 import type { IAgentBackend, AgentConfig, AgentSessionHandle } from "./agent-backend";
 
 /**
@@ -8,6 +9,7 @@ export class ClaudeBackend implements IAgentBackend {
   private config: AgentConfig | null = null;
   private sessionId: string | null = null;
   private queryFn: any = null;
+  private abortController: AbortController | null = null;
 
   async initialize(config: AgentConfig): Promise<void> {
     this.config = config;
@@ -20,10 +22,8 @@ export class ClaudeBackend implements IAgentBackend {
       throw new Error("Backend not initialized. Call initialize() first.");
     }
 
-    // The Claude SDK creates sessions implicitly via query().
-    // We'll capture the session ID from the first query response.
     const id = `claude-${Date.now()}`;
-    this.sessionId = null; // Will be set after first query
+    this.sessionId = null;
     return { id };
   }
 
@@ -49,14 +49,32 @@ export class ClaudeBackend implements IAgentBackend {
       }
     }
 
+    this.abortController = new AbortController();
+
     const options: any = {
       cwd: this.config.workspacePath,
       mcpServers,
       allowedTools: ["*"],
+      maxTurns: 30,
+      abortController: this.abortController,
+      // Custom spawn: merge system env (fixes Windows PATH/ENOENT issues)
+      // and remove CLAUDECODE var to allow nested sessions.
+      spawnClaudeCodeProcess: (spawnOpts: any) => {
+        const cmd = spawnOpts.command === "node" ? process.execPath : spawnOpts.command;
+        const env = { ...process.env, ...spawnOpts.env };
+        delete env.CLAUDECODE;
+        return spawn(cmd, spawnOpts.args, {
+          cwd: spawnOpts.cwd,
+          env,
+          stdio: ["pipe", "pipe", "pipe"],
+          windowsHide: true,
+        });
+      },
     };
 
     if (this.config.autoApprove) {
       options.permissionMode = "bypassPermissions";
+      options.allowDangerouslySkipPermissions = true;
     } else {
       options.permissionMode = "acceptEdits";
     }
@@ -77,7 +95,6 @@ export class ClaudeBackend implements IAgentBackend {
 
       // Collect assistant text
       if (message.type === "assistant" && message.content) {
-        // Content can be array of blocks or string
         if (typeof message.content === "string") {
           result = message.content;
         } else if (Array.isArray(message.content)) {
@@ -91,8 +108,13 @@ export class ClaudeBackend implements IAgentBackend {
       }
 
       // Get final result
-      if (message.type === "result" && message.subtype === "success" && message.result) {
-        result = message.result;
+      if (message.type === "result") {
+        if (message.subtype === "success" && message.result) {
+          result = message.result;
+        } else if (message.subtype !== "success") {
+          const errorInfo = message.result || message.error || message.subtype;
+          throw new Error(`Claude query failed (${message.subtype}): ${errorInfo}`);
+        }
       }
     }
 
@@ -100,6 +122,10 @@ export class ClaudeBackend implements IAgentBackend {
   }
 
   async dispose(): Promise<void> {
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
     this.config = null;
     this.sessionId = null;
     this.queryFn = null;

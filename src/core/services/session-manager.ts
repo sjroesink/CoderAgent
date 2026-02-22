@@ -119,6 +119,7 @@ export class SessionManager extends EventEmitter {
         await this.updateSessionStatus(sessionId, "Completed");
       } catch (err: any) {
         console.error(`Session ${sessionId} failed: ${err.message}`);
+        await multiChannel.sendStatus(`Error: ${err.message}`).catch(() => {});
         await this.updateSessionStatus(sessionId, "Failed");
       } finally {
         this.activeSessions.delete(sessionId);
@@ -155,12 +156,22 @@ export class SessionManager extends EventEmitter {
       .set({ updatedAt: new Date().toISOString() })
       .where(eq(sessions.id, sessionId));
 
+    // Skip emit for WebUI user messages — sendUserMessage() already emitted
+    // them immediately so they appear in the UI without waiting for the
+    // orchestrator to dequeue.
+    if (sender === "User" && channelType === "WebUI") return;
+
     this.emit("messagePersisted", sessionId, channelType, sender, content, messageType);
   }
 
   sendUserMessage(sessionId: string, message: string): void {
     const active = this.activeSessions.get(sessionId);
     if (active) {
+      // Emit immediately so the UI shows the message right away,
+      // even if the orchestrator hasn't read it yet.
+      // The actual DB persist happens when PersistingChannel.receiveMessage picks it up.
+      this.emit("messagePersisted", sessionId, "WebUI", "User", message, "Message");
+
       const webUi = active.multiChannel.getWebUIChannel();
       webUi?.enqueueUserMessage(message);
     }
@@ -197,6 +208,13 @@ export class SessionManager extends EventEmitter {
       return query.limit(limit);
     }
     return query;
+  }
+
+  async addSessionChannel(sessionId: string, channelType: ChannelType): Promise<void> {
+    await this.db.insert(sessionChannels).values({
+      sessionId,
+      channelType,
+    });
   }
 
   async getSessionChannels(sessionId: string) {

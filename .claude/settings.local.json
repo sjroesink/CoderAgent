@@ -5,7 +5,9 @@
       "Bash(npm run build:*)",
       "mcp__acp__Bash",
       "mcp__acp__Edit",
-      "Bash(cd /d/Projects/AgentCoder && docker build --progress=plain -t agentcoder . 2>&1)"
+      "Bash(cd /d/Projects/AgentCoder && docker build --progress=plain -t agentcoder . 2>&1)",
+      "Bash(docker stop:*)",
+      "Bash(npx tsx:*)"
     ]
   }
 }

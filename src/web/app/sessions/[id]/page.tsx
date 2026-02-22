@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState, useRef, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { getSocket } from "../../../lib/socket";
 import { MarkdownMessage } from "../../../components/MarkdownMessage";
 import { ChannelIcon } from "../../../components/ChannelIcon";
@@ -84,16 +84,51 @@ function shouldRenderMarkdown(type: string, sender: string): boolean {
   return sender === "Agent" || type === "Completion";
 }
 
+function formatTime(ts: string): string {
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 export default function SessionDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const sessionId = params.id as string;
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [msgList, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sendMode, setSendMode] = useState<SendMode>("send");
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [metaCollapsed, setMetaCollapsed] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Smart auto-scroll: stick to bottom unless user scrolled up
+  const isUserScrolledUp = useRef(false);
+  const lastScrollTop = useRef(0);
+
+  const scrollToBottom = useCallback(() => {
+    if (logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight;
+    }
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    if (!logRef.current) return;
+    const el = logRef.current;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+
+    // If user scrolled up (scrollTop decreased and not near bottom)
+    if (el.scrollTop < lastScrollTop.current && !atBottom) {
+      isUserScrolledUp.current = true;
+    }
+
+    // If near bottom, re-enable auto-scroll
+    if (atBottom) {
+      isUserScrolledUp.current = false;
+    }
+
+    lastScrollTop.current = el.scrollTop;
+  }, []);
 
   const fetchSession = async () => {
     const res = await fetch(`/api/sessions/${sessionId}`);
@@ -127,11 +162,17 @@ export default function SessionDetailPage() {
     };
   }, [sessionId]);
 
+  // Auto-scroll on new messages (unless user scrolled up)
   useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
+    if (!isUserScrolledUp.current) {
+      scrollToBottom();
     }
-  }, [msgList]);
+  }, [msgList, scrollToBottom]);
+
+  // Initial scroll to bottom
+  useEffect(() => {
+    scrollToBottom();
+  }, [scrollToBottom]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -158,6 +199,10 @@ export default function SessionDetailPage() {
       body: JSON.stringify({ message: msg }),
     });
     setInput("");
+    inputRef.current?.focus();
+    // Force scroll to bottom when user sends a message
+    isUserScrolledUp.current = false;
+    requestAnimationFrame(scrollToBottom);
   };
 
   const restartSession = async () => {
@@ -176,7 +221,14 @@ export default function SessionDetailPage() {
     }
   };
 
-  if (!session) return <div>Loading...</div>;
+  if (!session) {
+    return (
+      <div className="loading">
+        <div className="loading-spinner" />
+        Loading session...
+      </div>
+    );
+  }
 
   const statusBadge = session.status.toLowerCase();
   const badgeClass =
@@ -188,95 +240,117 @@ export default function SessionDetailPage() {
           ? "badge badge-failed"
           : "badge badge-pending";
 
+  const currentMode = SEND_MODES.find((m) => m.mode === sendMode)!;
+
   return (
     <div className="session-page">
       <div className="session-header">
-        <div className="flex-between mb-1">
-          <h1>Session Detail</h1>
-          <span className={badgeClass}>{session.status}</span>
-        </div>
-
-        <div className="card">
-          <div className="meta-grid">
-            <div className="meta-item">
-              <div className="meta-label">Task</div>
-              <div className="meta-value">{session.task}</div>
-            </div>
-            {session.githubRepo ? (
-              <div className="meta-item">
-                <div className="meta-label">GitHub Repository</div>
-                <div className="meta-value">
-                  <a href={`https://github.com/${session.githubRepo}`} target="_blank" rel="noopener noreferrer">
-                    {session.githubRepo}
-                  </a>
-                </div>
+        {/* Top bar with back, title, status, actions */}
+        <div className="session-topbar">
+          <div className="session-topbar-left">
+            <button className="btn btn-icon" onClick={() => router.push("/sessions")} title="Back to sessions">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 3L5 8l5 5" />
+              </svg>
+            </button>
+            <div className="session-title-group">
+              <h1 className="session-title">{session.task.length > 80 ? session.task.substring(0, 80) + "..." : session.task}</h1>
+              <div className="session-subtitle">
+                <span className={badgeClass}>{session.status}</span>
+                <span className="session-subtitle-sep">|</span>
+                <span className="session-subtitle-text">{session.backendType}</span>
+                {session.githubRepo && (
+                  <>
+                    <span className="session-subtitle-sep">|</span>
+                    <a href={`https://github.com/${session.githubRepo}`} target="_blank" rel="noopener noreferrer" className="session-subtitle-link">
+                      {session.githubRepo}
+                    </a>
+                  </>
+                )}
+                {session.branch && (
+                  <>
+                    <span className="session-subtitle-sep">|</span>
+                    <code className="session-subtitle-branch">{session.branch}</code>
+                  </>
+                )}
               </div>
+            </div>
+          </div>
+          <div className="session-topbar-actions">
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setMetaCollapsed(!metaCollapsed)}
+              title={metaCollapsed ? "Show details" : "Hide details"}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <circle cx="8" cy="8" r="6.5" />
+                <path d="M8 5v2M8 9h.01" />
+              </svg>
+              {metaCollapsed ? "Show" : "Hide"} Details
+            </button>
+            {session.isActive ? (
+              <>
+                <button className="btn btn-secondary btn-sm" onClick={() => sendMessage("status")}>
+                  Status
+                </button>
+                <button className="btn btn-danger btn-sm" onClick={() => sendMessage("stop")}>
+                  Stop
+                </button>
+              </>
             ) : (
-              <div className="meta-item">
-                <div className="meta-label">Repository</div>
-                <div className="meta-value">{session.repoPath}</div>
-              </div>
-            )}
-            <div className="meta-item">
-              <div className="meta-label">{session.baseBranch ? "Working Branch" : "Branch"}</div>
-              <div className="meta-value">{session.branch ?? "—"}</div>
-            </div>
-            {session.baseBranch && (
-              <div className="meta-item">
-                <div className="meta-label">Base Branch</div>
-                <div className="meta-value">{session.baseBranch}</div>
-              </div>
-            )}
-            <div className="meta-item">
-              <div className="meta-label">Backend</div>
-              <div className="meta-value">{session.backendType}</div>
-            </div>
-            <div className="meta-item">
-              <div className="meta-label">Channels</div>
-              <div className="meta-value channel-chips">
-                {session.channels.length > 0
-                  ? session.channels.map((c) => (
-                      <span key={c.channelType} className="channel-chip">
-                        <ChannelIcon channelType={c.channelType} size={14} />
-                        {c.channelType}
-                      </span>
-                    ))
-                  : "—"}
-              </div>
-            </div>
-            {session.prUrl && (
-              <div className="meta-item">
-                <div className="meta-label">Pull Request</div>
-                <div className="meta-value">
-                  <a href={session.prUrl} target="_blank" rel="noopener noreferrer">
-                    {session.prUrl}
-                  </a>
-                </div>
-              </div>
+              <button className="btn btn-primary btn-sm" onClick={restartSession}>
+                Restart
+              </button>
             )}
           </div>
         </div>
 
-        <div className="quick-actions">
-          {session.isActive ? (
-            <>
-              <button className="btn btn-secondary btn-sm" onClick={() => sendMessage("status")}>
-                Status
-              </button>
-              <button className="btn btn-danger btn-sm" onClick={() => sendMessage("stop")}>
-                Stop
-              </button>
-            </>
-          ) : (
-            <button className="btn btn-primary btn-sm" onClick={restartSession}>
-              Restart Session
-            </button>
-          )}
-        </div>
+        {/* Collapsible metadata card */}
+        {!metaCollapsed && (
+          <div className="card session-meta-card">
+            <div className="meta-grid">
+              {!session.githubRepo && (
+                <div className="meta-item">
+                  <div className="meta-label">Repository</div>
+                  <div className="meta-value">{session.repoPath}</div>
+                </div>
+              )}
+              {session.baseBranch && (
+                <div className="meta-item">
+                  <div className="meta-label">Base Branch</div>
+                  <div className="meta-value">{session.baseBranch}</div>
+                </div>
+              )}
+              <div className="meta-item">
+                <div className="meta-label">Channels</div>
+                <div className="meta-value channel-chips">
+                  {session.channels.length > 0
+                    ? session.channels.map((c) => (
+                        <span key={c.channelType} className="channel-chip">
+                          <ChannelIcon channelType={c.channelType} size={14} />
+                          {c.channelType}
+                        </span>
+                      ))
+                    : "—"}
+                </div>
+              </div>
+              {session.prUrl && (
+                <div className="meta-item">
+                  <div className="meta-label">Pull Request</div>
+                  <div className="meta-value">
+                    <a href={session.prUrl} target="_blank" rel="noopener noreferrer">
+                      View PR
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="chat-container">
-        <div className="message-log" ref={logRef}>
+        <div className="message-log" ref={logRef} onScroll={handleScroll}>
           {msgList.map((msg, i) => {
             const text = msg.message ?? msg.content ?? "";
             return (
@@ -287,7 +361,7 @@ export default function SessionDetailPage() {
                   )}
                   {msg.sender}
                   <span className="message-time">
-                    {new Date(msg.timestamp).toLocaleTimeString()}
+                    {formatTime(msg.timestamp)}
                   </span>
                 </div>
                 <div className="message-content">
@@ -301,17 +375,39 @@ export default function SessionDetailPage() {
             );
           })}
           {msgList.length === 0 && (
-            <div style={{ color: "var(--text-muted)", textAlign: "center", padding: "2rem" }}>
-              No messages yet.
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              </div>
+              <div className="empty-state-text">No messages yet. Waiting for agent to start...</div>
             </div>
           )}
         </div>
 
+        {/* Scroll-to-bottom indicator */}
+        {isUserScrolledUp.current && msgList.length > 0 && (
+          <button
+            className="scroll-to-bottom-btn"
+            onClick={() => {
+              isUserScrolledUp.current = false;
+              scrollToBottom();
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6l5 5 5-5" />
+            </svg>
+            New messages
+          </button>
+        )}
+
         {session.isActive && (
           <div className="input-area">
             <input
+              ref={inputRef}
               type="text"
-              placeholder={SEND_MODES.find((m) => m.mode === sendMode)!.placeholder}
+              placeholder={currentMode.placeholder}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -332,7 +428,10 @@ export default function SessionDetailPage() {
             />
             <div className="send-action-group" ref={dropdownRef}>
               <button className="btn btn-primary send-action-main" onClick={() => handleSend()}>
-                {SEND_MODES.find((m) => m.mode === sendMode)!.label}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2L7 9M14 2l-4 12-3-5.5L2 6z" />
+                </svg>
+                {currentMode.label}
               </button>
               <button
                 className="btn btn-primary send-action-toggle"
@@ -351,6 +450,7 @@ export default function SessionDetailPage() {
                       onClick={() => {
                         setSendMode(option.mode);
                         setDropdownOpen(false);
+                        inputRef.current?.focus();
                       }}
                     >
                       <div className="send-action-option-info">

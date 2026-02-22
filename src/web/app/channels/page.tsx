@@ -113,10 +113,13 @@ export default function ChannelsPage() {
 
   return (
     <div>
-      <div className="flex-between mb-1">
+      <div className="page-header">
         <h1>Global Channels</h1>
         <button className="btn btn-primary" onClick={() => { resetForm(); setShowForm(true); }}>
-          ➕ Add Channel
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M8 3v10M3 8h10" />
+          </svg>
+          Add Channel
         </button>
       </div>
 
@@ -139,18 +142,18 @@ export default function ChannelsPage() {
                     {ch.isEnabled ? "Enabled" : "Disabled"}
                   </span>
                 </td>
-                <td>{ch.name}</td>
+                <td style={{ fontWeight: 500 }}>{ch.name}</td>
                 <td>
                   <span className="channel-chip">
                     <ChannelIcon channelType={ch.channelType} size={14} />
                     {ch.channelType}
                   </span>
                 </td>
-                <td style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                <td style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
                   {new Date(ch.createdAt).toLocaleDateString()}
                 </td>
                 <td>
-                  <div style={{ display: "flex", gap: "0.25rem" }}>
+                  <div style={{ display: "flex", gap: "0.35rem" }}>
                     <button className="btn btn-secondary btn-sm" onClick={() => startEdit(ch)}>
                       Edit
                     </button>
@@ -166,8 +169,16 @@ export default function ChannelsPage() {
             ))}
             {channels.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ textAlign: "center", color: "var(--text-muted)" }}>
-                  No channels configured.
+                <td colSpan={5}>
+                  <div className="empty-state">
+                    <div className="empty-state-icon">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2v3M12 19v3M4.93 7L7.6 8.5M16.4 15.5l2.67 1.5M4.93 17l2.67-1.5M16.4 8.5l2.67-1.5" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    </div>
+                    <div className="empty-state-text">No channels configured.</div>
+                  </div>
                 </td>
               </tr>
             )}
@@ -234,7 +245,7 @@ export default function ChannelsPage() {
 
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button className="btn btn-primary" onClick={handleSave}>
-              {editingId ? "Save" : "Create"}
+              {editingId ? "Save Changes" : "Create Channel"}
             </button>
             <button className="btn btn-secondary" onClick={resetForm}>
               Cancel

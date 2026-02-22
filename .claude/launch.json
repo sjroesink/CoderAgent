@@ -1,0 +1,24 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "C:\\nvm4w\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Projects\\AgentCoder\\node_modules\\tsx\\dist\\cli.mjs", "src/web/server.ts"],
+      "port": 4555
+    },
+    {
+      "name": "dev:next",
+      "runtimeExecutable": "C:\\nvm4w\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Projects\\AgentCoder\\node_modules\\next\\dist\\bin\\next", "dev", "--port", "3000", "src/web"],
+      "port": 3000
+    },
+    {
+      "name": "db:studio",
+      "runtimeExecutable": "C:\\nvm4w\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Projects\\AgentCoder\\node_modules\\drizzle-kit\\bin.cjs", "studio"],
+      "port": 4983
+    }
+  ],
+  "autoVerify": false
+}

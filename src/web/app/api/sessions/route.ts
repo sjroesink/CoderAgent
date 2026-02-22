@@ -94,9 +94,7 @@ export async function POST(request: Request) {
     // Add GitHub PR channel if a draft PR was created
     if (prUrl) {
       try {
-        // Set env vars for the GitHubPrChannel
-        process.env.GITHUB_PR_URL = prUrl;
-        const ghPrChannel = new GitHubPrChannel();
+        const ghPrChannel = new GitHubPrChannel(github, prUrl);
         const persistingGhPr = new PersistingChannel(
           ghPrChannel,
           sessionId,

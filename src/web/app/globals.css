@@ -678,3 +678,29 @@ tr.clickable:hover { background: rgba(59, 130, 246, 0.05); }
 
 .gap-sm { gap: 0.5rem; }
 .mb-1 { margin-bottom: 1rem; }
+
+/* GitHub connect card */
+.github-connect-card {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.github-connect-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+}
+
+.github-connect-card code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.82em;
+}

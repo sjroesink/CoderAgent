@@ -1,3 +1,4 @@
+import { Octokit } from "octokit";
 import { execa } from "execa";
 import * as fs from "fs";
 import * as path from "path";
@@ -15,29 +16,35 @@ export interface GitHubBranch {
 }
 
 /**
- * Service for interacting with GitHub via the `gh` CLI.
- * Used in Docker/cloud mode to let users select repos and branches.
+ * Service for interacting with GitHub via Octokit (REST API).
+ * Uses a Personal Access Token stored in the database.
  */
 export class GitHubService {
   private workspacesRoot: string;
+  private token: string | undefined;
+  private octokit: Octokit | null = null;
 
-  constructor(workspacesRoot = "/data/workspaces") {
+  constructor(workspacesRoot = "/data/workspaces", token?: string) {
     this.workspacesRoot = workspacesRoot;
+    if (token) {
+      this.setToken(token);
+    }
   }
 
-  /** Check if the gh CLI is authenticated. */
-  async getAuthStatus(): Promise<{ authenticated: boolean; username?: string }> {
-    try {
-      const result = await execa("gh", ["auth", "status"], { reject: false });
-      // gh auth status outputs to stderr on success
-      const output = result.stdout + result.stderr;
-      if (result.exitCode === 0) {
-        const match = output.match(/Logged in to github\.com.*account\s+(\S+)/i)
-          ?? output.match(/account\s+(\S+)/i)
-          ?? output.match(/Logged in to github\.com as (\S+)/i);
-        return { authenticated: true, username: match?.[1] };
-      }
+  /** Update the token and recreate the Octokit client. */
+  setToken(token: string): void {
+    this.token = token;
+    this.octokit = new Octokit({ auth: token });
+  }
+
+  /** Check if a valid token is configured and return the authenticated user. */
+  async getAuthStatus(): Promise<{ authenticated: boolean; username?: string; avatarUrl?: string }> {
+    if (!this.token || !this.octokit) {
       return { authenticated: false };
+    }
+    try {
+      const { data } = await this.octokit.rest.users.getAuthenticated();
+      return { authenticated: true, username: data.login, avatarUrl: data.avatar_url };
     } catch {
       return { authenticated: false };
     }
@@ -45,84 +52,68 @@ export class GitHubService {
 
   /** List repositories the authenticated user has access to. */
   async listRepos(limit = 50): Promise<GitHubRepo[]> {
-    const result = await execa("gh", [
-      "repo", "list",
-      "--limit", String(limit),
-      "--json", "nameWithOwner,description,url,isPrivate,defaultBranchRef",
-    ], { reject: false });
+    this.ensureAuthenticated();
 
-    if (result.exitCode !== 0) {
-      throw new Error(`Failed to list repos: ${result.stderr}`);
-    }
+    const { data } = await this.octokit!.rest.repos.listForAuthenticatedUser({
+      sort: "updated",
+      per_page: limit,
+      affiliation: "owner,collaborator,organization_member",
+    });
 
-    const raw = JSON.parse(result.stdout) as Array<{
-      nameWithOwner: string;
-      description: string;
-      url: string;
-      isPrivate: boolean;
-      defaultBranchRef: { name: string } | null;
-    }>;
-
-    return raw.map((r) => ({
-      nameWithOwner: r.nameWithOwner,
+    return data.map((r) => ({
+      nameWithOwner: r.full_name,
       description: r.description ?? "",
-      url: r.url,
-      isPrivate: r.isPrivate,
-      defaultBranch: r.defaultBranchRef?.name ?? "main",
+      url: r.html_url,
+      isPrivate: r.private,
+      defaultBranch: r.default_branch ?? "main",
     }));
   }
 
   /** Search repositories by name. */
   async searchRepos(query: string, limit = 30): Promise<GitHubRepo[]> {
-    const result = await execa("gh", [
-      "search", "repos", query,
-      "--limit", String(limit),
-      "--owner", "@me",
-      "--json", "nameWithOwner,description,url,isPrivate",
-    ], { reject: false });
+    this.ensureAuthenticated();
 
-    // If search fails, fall back to listing and filtering
-    if (result.exitCode !== 0) {
+    try {
+      // Search within user's repos
+      const { data: user } = await this.octokit!.rest.users.getAuthenticated();
+      const { data } = await this.octokit!.rest.search.repos({
+        q: `${query} user:${user.login}`,
+        per_page: limit,
+      });
+
+      return data.items.map((r) => ({
+        nameWithOwner: r.full_name,
+        description: r.description ?? "",
+        url: r.html_url,
+        isPrivate: r.private,
+        defaultBranch: r.default_branch ?? "main",
+      }));
+    } catch {
+      // Fall back to listing and filtering
       const all = await this.listRepos(100);
       const q = query.toLowerCase();
       return all.filter((r) => r.nameWithOwner.toLowerCase().includes(q));
     }
-
-    const raw = JSON.parse(result.stdout) as Array<{
-      nameWithOwner: string;
-      description: string;
-      url: string;
-      isPrivate: boolean;
-    }>;
-
-    return raw.map((r) => ({
-      nameWithOwner: r.nameWithOwner,
-      description: r.description ?? "",
-      url: r.url,
-      isPrivate: r.isPrivate,
-      defaultBranch: "main",
-    }));
   }
 
   /** List branches for a given repository. */
   async listBranches(repo: string, limit = 100): Promise<GitHubBranch[]> {
-    const result = await execa("gh", [
-      "api",
-      `repos/${repo}/branches`,
-      "--paginate",
-      "--jq", `.[].name`,
-    ], { reject: false });
+    this.ensureAuthenticated();
 
-    if (result.exitCode !== 0) {
-      throw new Error(`Failed to list branches for ${repo}: ${result.stderr}`);
-    }
+    const [owner, repoName] = repo.split("/");
+    const { data } = await this.octokit!.rest.repos.listBranches({
+      owner,
+      repo: repoName,
+      per_page: limit,
+    });
 
-    const names = result.stdout.trim().split("\n").filter(Boolean);
-    return names.slice(0, limit).map((name) => ({ name }));
+    return data.map((b) => ({ name: b.name }));
   }
 
   /** Clone a repository into the workspaces directory. Returns the clone path. */
   async cloneRepo(repo: string): Promise<string> {
+    this.ensureAuthenticated();
+
     const repoName = repo.split("/").pop()!;
     const clonePath = path.join(this.workspacesRoot, repoName);
 
@@ -136,9 +127,9 @@ export class GitHubService {
     // Ensure workspaces directory exists
     fs.mkdirSync(this.workspacesRoot, { recursive: true });
 
-    const result = await execa("gh", [
-      "repo", "clone", repo, clonePath,
-    ], { reject: false });
+    // Clone using token-authenticated HTTPS URL
+    const cloneUrl = `https://x-access-token:${this.token}@github.com/${repo}.git`;
+    const result = await execa("git", ["clone", cloneUrl, clonePath], { reject: false });
 
     if (result.exitCode !== 0) {
       throw new Error(`Failed to clone ${repo}: ${result.stderr}`);
@@ -197,7 +188,7 @@ export class GitHubService {
   }
 
   /**
-   * Create a draft pull request for a session branch.
+   * Create a draft pull request for a session branch via the GitHub API.
    * Returns the PR URL.
    */
   async createDraftPr(
@@ -208,6 +199,8 @@ export class GitHubService {
     title: string,
     body: string,
   ): Promise<string | null> {
+    this.ensureAuthenticated();
+
     // We need at least one commit to create a PR - create an initial empty commit
     await execa("git", [
       "commit", "--allow-empty", "-m", `[CoderAgent] Start session: ${title}`,
@@ -223,24 +216,43 @@ export class GitHubService {
       return null;
     }
 
-    // Create draft PR
-    const prResult = await execa("gh", [
-      "pr", "create",
-      "--repo", repo,
-      "--head", branchName,
-      "--base", baseBranch,
-      "--title", title,
-      "--body", body,
-      "--draft",
-    ], { cwd: repoPath, reject: false });
+    // Create draft PR via Octokit
+    const [owner, repoName] = repo.split("/");
+    try {
+      const { data: pr } = await this.octokit!.rest.pulls.create({
+        owner,
+        repo: repoName,
+        head: branchName,
+        base: baseBranch,
+        title,
+        body,
+        draft: true,
+      });
 
-    if (prResult.exitCode !== 0) {
-      console.error(`Failed to create draft PR: ${prResult.stderr}`);
+      console.log(`Draft PR created: ${pr.html_url}`);
+      return pr.html_url;
+    } catch (err: any) {
+      console.error(`Failed to create draft PR: ${err.message}`);
       return null;
     }
+  }
 
-    const prUrl = prResult.stdout.trim();
-    console.log(`Draft PR created: ${prUrl}`);
-    return prUrl;
+  /** Post a comment on a pull request. */
+  async postPrComment(repo: string, prNumber: number, body: string): Promise<void> {
+    this.ensureAuthenticated();
+
+    const [owner, repoName] = repo.split("/");
+    await this.octokit!.rest.issues.createComment({
+      owner,
+      repo: repoName,
+      issue_number: prNumber,
+      body,
+    });
+  }
+
+  private ensureAuthenticated(): void {
+    if (!this.token || !this.octokit) {
+      throw new Error("GitHub is not connected. Please add a Personal Access Token in Settings.");
+    }
   }
 }

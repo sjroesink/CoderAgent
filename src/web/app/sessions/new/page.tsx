@@ -50,6 +50,12 @@ export default function NewSessionPage() {
   const [ghBranchesLoading, setGhBranchesLoading] = useState(false);
   const [ghSelectedBranch, setGhSelectedBranch] = useState<string>("");
 
+  // GitHub connect dialog state
+  const [showTokenDialog, setShowTokenDialog] = useState(false);
+  const [tokenInput, setTokenInput] = useState("");
+  const [tokenError, setTokenError] = useState("");
+  const [tokenSubmitting, setTokenSubmitting] = useState(false);
+
   // Fetch global channels
   useEffect(() => {
     fetch("/api/channels")
@@ -58,7 +64,7 @@ export default function NewSessionPage() {
   }, []);
 
   // Check GitHub auth status on mount
-  useEffect(() => {
+  const checkGitHubAuth = useCallback(() => {
     fetch("/api/github")
       .then((r) => r.json())
       .then((data) => {
@@ -68,6 +74,10 @@ export default function NewSessionPage() {
       })
       .catch(() => setGhAuthenticated(false));
   }, []);
+
+  useEffect(() => {
+    checkGitHubAuth();
+  }, [checkGitHubAuth]);
 
   // Fetch repos when switching to GitHub mode
   useEffect(() => {
@@ -132,6 +142,52 @@ export default function NewSessionPage() {
       else next.add(id);
       return next;
     });
+  };
+
+  const handleConnectGitHub = async () => {
+    if (!tokenInput.trim()) {
+      setTokenError("Please enter a token.");
+      return;
+    }
+
+    setTokenSubmitting(true);
+    setTokenError("");
+
+    try {
+      const res = await fetch("/api/github", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: tokenInput.trim() }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setTokenError(data.error || "Failed to connect.");
+        return;
+      }
+
+      // Success
+      setGhAuthenticated(true);
+      setGhUsername(data.username);
+      setShowTokenDialog(false);
+      setTokenInput("");
+      setRepoSource("github");
+      fetchRepos();
+    } catch (err: any) {
+      setTokenError(err.message);
+    } finally {
+      setTokenSubmitting(false);
+    }
+  };
+
+  const handleDisconnectGitHub = async () => {
+    await fetch("/api/github", { method: "DELETE" });
+    setGhAuthenticated(false);
+    setGhUsername("");
+    setGhRepos([]);
+    setGhSelectedRepo("");
+    setGhSelectedBranch("");
+    setRepoSource("local");
   };
 
   const handleSubmit = async () => {
@@ -234,11 +290,15 @@ export default function NewSessionPage() {
             <button
               type="button"
               className={`btn btn-sm ${repoSource === "github" ? "btn-primary" : "btn-secondary"}`}
-              onClick={() => setRepoSource("github")}
-              disabled={ghAuthenticated === false}
-              title={ghAuthenticated === false ? "GitHub CLI not authenticated" : undefined}
+              onClick={() => {
+                if (ghAuthenticated) {
+                  setRepoSource("github");
+                } else {
+                  setShowTokenDialog(true);
+                }
+              }}
             >
-              GitHub {ghAuthenticated === false && "(not connected)"}
+              GitHub {ghAuthenticated && ghUsername ? `(${ghUsername})` : ""}
             </button>
           </div>
         </div>
@@ -270,7 +330,19 @@ export default function NewSessionPage() {
         {repoSource === "github" && ghAuthenticated && (
           <>
             <div className="form-group">
-              <label>GitHub Repository * {ghUsername && <span style={{ fontWeight: "normal", color: "var(--text-muted)" }}>({ghUsername})</span>}</label>
+              <div className="flex-between" style={{ marginBottom: "0.5rem" }}>
+                <label style={{ margin: 0 }}>
+                  GitHub Repository * <span style={{ fontWeight: "normal", color: "var(--text-muted)" }}>({ghUsername})</span>
+                </label>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  onClick={handleDisconnectGitHub}
+                  style={{ fontSize: "0.75rem" }}
+                >
+                  Disconnect
+                </button>
+              </div>
               <input
                 type="text"
                 value={ghRepoSearch}
@@ -319,13 +391,51 @@ export default function NewSessionPage() {
                 </small>
               </div>
             )}
-
           </>
         )}
 
-        {repoSource === "github" && ghAuthenticated === false && (
-          <div className="error">
-            GitHub CLI is not authenticated. Run <code>gh auth login</code> in the container to connect.
+        {/* Connect with GitHub dialog */}
+        {(showTokenDialog || (repoSource === "github" && !ghAuthenticated)) && (
+          <div className="github-connect-card">
+            <div className="github-connect-header">
+              <svg viewBox="0 0 16 16" width="24" height="24" fill="currentColor">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+              </svg>
+              <span>Connect with GitHub</span>
+            </div>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: "0.75rem" }}>
+              Enter a <a href="https://github.com/settings/tokens/new?scopes=repo" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>Personal Access Token</a> with <code>repo</code> scope to connect your GitHub account.
+            </p>
+            <input
+              type="password"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              onKeyDown={(e) => e.key === "Enter" && handleConnectGitHub()}
+            />
+            {tokenError && <div className="error" style={{ marginTop: "0.5rem", marginBottom: 0 }}>{tokenError}</div>}
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleConnectGitHub}
+                disabled={tokenSubmitting}
+              >
+                {tokenSubmitting ? "Connecting..." : "Connect"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setShowTokenDialog(false);
+                  setTokenInput("");
+                  setTokenError("");
+                  if (!ghAuthenticated) setRepoSource("local");
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 

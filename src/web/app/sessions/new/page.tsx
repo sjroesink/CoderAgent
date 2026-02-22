@@ -261,7 +261,9 @@ export default function NewSessionPage() {
 
   return (
     <div>
-      <h1>New Session</h1>
+      <div className="page-header">
+        <h1>New Session</h1>
+      </div>
 
       {error && <div className="error">{error}</div>}
 
@@ -285,6 +287,9 @@ export default function NewSessionPage() {
               className={`btn btn-sm ${repoSource === "local" ? "btn-primary" : "btn-secondary"}`}
               onClick={() => setRepoSource("local")}
             >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 13V3h5l2 2h5v8z" />
+              </svg>
               Local Path
             </button>
             <button
@@ -298,6 +303,9 @@ export default function NewSessionPage() {
                 }
               }}
             >
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+              </svg>
               GitHub {ghAuthenticated && ghUsername ? `(${ghUsername})` : ""}
             </button>
           </div>
@@ -332,7 +340,7 @@ export default function NewSessionPage() {
             <div className="form-group">
               <div className="flex-between" style={{ marginBottom: "0.5rem" }}>
                 <label style={{ margin: 0 }}>
-                  GitHub Repository * <span style={{ fontWeight: "normal", color: "var(--text-muted)" }}>({ghUsername})</span>
+                  GitHub Repository * <span style={{ fontWeight: "normal", color: "var(--text-tertiary)" }}>({ghUsername})</span>
                 </label>
                 <button
                   type="button"
@@ -351,7 +359,10 @@ export default function NewSessionPage() {
                 style={{ marginBottom: "0.5rem" }}
               />
               {ghReposLoading ? (
-                <div style={{ color: "var(--text-muted)", padding: "0.5rem 0" }}>Loading repositories...</div>
+                <div className="loading" style={{ justifyContent: "flex-start", padding: "0.5rem 0" }}>
+                  <div className="loading-spinner" />
+                  Loading repositories...
+                </div>
               ) : (
                 <select
                   value={ghSelectedRepo}
@@ -373,7 +384,10 @@ export default function NewSessionPage() {
               <div className="form-group">
                 <label>Base Branch *</label>
                 {ghBranchesLoading ? (
-                  <div style={{ color: "var(--text-muted)", padding: "0.5rem 0" }}>Loading branches...</div>
+                  <div className="loading" style={{ justifyContent: "flex-start", padding: "0.5rem 0" }}>
+                    <div className="loading-spinner" />
+                    Loading branches...
+                  </div>
                 ) : (
                   <select
                     value={ghSelectedBranch}
@@ -386,8 +400,8 @@ export default function NewSessionPage() {
                     ))}
                   </select>
                 )}
-                <small style={{ color: "var(--text-muted)", display: "block", marginTop: "0.25rem" }}>
-                  A new <code>coderagent/*</code> branch will be created from this branch. A draft PR will be opened automatically.
+                <small style={{ color: "var(--text-tertiary)", display: "block", marginTop: "0.35rem", fontSize: "0.8rem" }}>
+                  A new <code style={{ background: "var(--bg-input)", padding: "0.1rem 0.35rem", fontSize: "0.82em", border: "1px solid var(--border-subtle)" }}>coderagent/*</code> branch will be created from this branch. A draft PR will be opened automatically.
                 </small>
               </div>
             )}
@@ -403,8 +417,8 @@ export default function NewSessionPage() {
               </svg>
               <span>Connect with GitHub</span>
             </div>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: "0.75rem" }}>
-              Enter a <a href="https://github.com/settings/tokens/new?scopes=repo" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>Personal Access Token</a> with <code>repo</code> scope to connect your GitHub account.
+            <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginBottom: "0.75rem" }}>
+              Enter a <a href="https://github.com/settings/tokens/new?scopes=repo" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>Personal Access Token</a> with <code style={{ background: "var(--bg-hover)", padding: "0.1rem 0.35rem", fontSize: "0.82em" }}>repo</code> scope to connect your GitHub account.
             </p>
             <input
               type="password"
@@ -495,8 +509,21 @@ export default function NewSessionPage() {
           className="btn btn-primary"
           onClick={handleSubmit}
           disabled={submitting}
+          style={{ marginTop: "0.5rem" }}
         >
-          {submitting ? "Creating..." : "Create Session"}
+          {submitting ? (
+            <>
+              <div className="loading-spinner" />
+              Creating...
+            </>
+          ) : (
+            <>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M13.5 3L6 10.5 2.5 7" />
+              </svg>
+              Create Session
+            </>
+          )}
         </button>
       </div>
     </div>

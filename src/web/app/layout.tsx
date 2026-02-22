@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AppShell } from "../components/AppShell";
 
 export const metadata: Metadata = {
   title: "AgentCoder",
@@ -8,22 +9,30 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var theme = localStorage.getItem('theme') || 'system';
+                  var resolved = theme;
+                  if (theme === 'system') {
+                    resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                  }
+                  document.documentElement.setAttribute('data-theme', resolved);
+                } catch(e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body>
-        <div className="app-layout">
-          <aside className="sidebar">
-            <div className="brand">
-              <span className="brand-icon">🤖</span>
-              <span className="brand-text">AgentCoder</span>
-            </div>
-            <nav className="nav-menu">
-              <a href="/sessions" className="nav-link">📋 Sessions</a>
-              <a href="/sessions/new" className="nav-link">➕ New Session</a>
-              <a href="/channels" className="nav-link">📡 Channels</a>
-            </nav>
-          </aside>
-          <main className="main-content">{children}</main>
-        </div>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

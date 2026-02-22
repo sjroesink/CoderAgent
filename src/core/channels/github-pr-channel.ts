@@ -1,35 +1,27 @@
-import { execa } from "execa";
 import type { IChannel } from "./channel";
 import { ConsoleChannel } from "./console-channel";
+import type { GitHubService } from "../services/github-service";
 
 /**
  * GitHub Pull Request channel that posts agent updates as PR comments
- * using the GitHub CLI (gh).
- * Requires: gh CLI installed + GITHUB_PR_URL or GITHUB_REPO + GITHUB_PR_NUMBER
+ * using Octokit via the shared GitHubService.
  */
 export class GitHubPrChannel implements IChannel {
   private repo: string;
   private prNumber: number;
+  private githubService: GitHubService;
   private fallback = new ConsoleChannel();
 
-  constructor() {
-    const prUrl = process.env.GITHUB_PR_URL;
-    if (prUrl) {
-      const url = new URL(prUrl);
-      const segments = url.pathname.replace(/^\/+/, "").split("/");
-      if (segments.length >= 4 && segments[2] === "pull") {
-        this.repo = `${segments[0]}/${segments[1]}`;
-        this.prNumber = parseInt(segments[3], 10);
-      } else {
-        throw new Error(`Could not parse PR URL: ${prUrl}`);
-      }
+  constructor(githubService: GitHubService, prUrl: string) {
+    this.githubService = githubService;
+
+    const url = new URL(prUrl);
+    const segments = url.pathname.replace(/^\/+/, "").split("/");
+    if (segments.length >= 4 && segments[2] === "pull") {
+      this.repo = `${segments[0]}/${segments[1]}`;
+      this.prNumber = parseInt(segments[3], 10);
     } else {
-      this.repo = process.env.GITHUB_REPO ?? "";
-      const prNumStr = process.env.GITHUB_PR_NUMBER ?? "";
-      if (!this.repo || !prNumStr) {
-        throw new Error("Set GITHUB_PR_URL or both GITHUB_REPO and GITHUB_PR_NUMBER.");
-      }
-      this.prNumber = parseInt(prNumStr, 10);
+      throw new Error(`Could not parse PR URL: ${prUrl}`);
     }
   }
 
@@ -54,11 +46,7 @@ export class GitHubPrChannel implements IChannel {
 
   private async postPrComment(body: string): Promise<void> {
     try {
-      await execa("gh", [
-        "pr", "comment", String(this.prNumber),
-        "--repo", this.repo,
-        "--body", body,
-      ]);
+      await this.githubService.postPrComment(this.repo, this.prNumber, body);
     } catch (err: any) {
       console.error(`[GitHubPR] Error posting comment: ${err.message}`);
     }

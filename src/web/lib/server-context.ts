@@ -1,6 +1,7 @@
 import { Server as SocketIOServer } from "socket.io";
 import { createDb, type Db } from "../../core/data/db";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
+import { settings } from "../../core/data/schema";
 import { SessionManager } from "../../core/services/session-manager";
 import { StatusSummarizer } from "../../core/services/status-summarizer";
 import { GlobalChannelService } from "../../core/services/global-channel-service";
@@ -70,8 +71,35 @@ export function initDb(): Db {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
+
+    g._db.run(sql`CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )`);
   }
   return g._db;
+}
+
+/** Read a setting value from the database. */
+export function getSetting(key: string): string | undefined {
+  const db = initDb();
+  const row = db.select().from(settings).where(eq(settings.key, key)).get();
+  return row?.value;
+}
+
+/** Write a setting value to the database (upsert). */
+export function setSetting(key: string, value: string): void {
+  const db = initDb();
+  db.insert(settings)
+    .values({ key, value })
+    .onConflictDoUpdate({ target: settings.key, set: { value } })
+    .run();
+}
+
+/** Delete a setting from the database. */
+export function deleteSetting(key: string): void {
+  const db = initDb();
+  db.delete(settings).where(eq(settings.key, key)).run();
 }
 
 export function getSessionManager(): SessionManager {
@@ -97,8 +125,22 @@ export function getGlobalChannelService(): GlobalChannelService {
 
 export function getGitHubService(): GitHubService {
   if (!g._githubService) {
-    g._githubService = new GitHubService(process.env.WORKSPACES_ROOT ?? "/data/workspaces");
+    const token = getSetting("github_token");
+    g._githubService = new GitHubService(
+      process.env.WORKSPACES_ROOT ?? "/data/workspaces",
+      token,
+    );
   }
+  return g._githubService;
+}
+
+/** Refresh the GitHubService singleton (e.g. after token change). */
+export function refreshGitHubService(): GitHubService {
+  const token = getSetting("github_token");
+  g._githubService = new GitHubService(
+    process.env.WORKSPACES_ROOT ?? "/data/workspaces",
+    token,
+  );
   return g._githubService;
 }
 

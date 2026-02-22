@@ -2,7 +2,6 @@ import { ChannelType, type IChannel } from "./channel";
 import { ConsoleChannel } from "./console-channel";
 import { JiraChannel } from "./jira-channel";
 import { TeamsChannel } from "./teams-channel";
-import { GitHubPrChannel } from "./github-pr-channel";
 import { TelegramChannel, type TelegramChannelOptions } from "./telegram-channel";
 import { WebUIChannel, type IWebUIBridge } from "./webui-channel";
 
@@ -15,7 +14,7 @@ export function createChannel(type: ChannelType, options?: unknown): IChannel {
     case ChannelType.Teams:
       return new TeamsChannel();
     case ChannelType.GitHubPR:
-      return new GitHubPrChannel();
+      throw new Error("GitHubPR channel requires a GitHubService instance. Use createGitHubPrChannel() directly.");
     case ChannelType.Telegram:
       return options
         ? new TelegramChannel(options as TelegramChannelOptions)

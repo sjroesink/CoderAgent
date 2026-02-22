@@ -72,6 +72,11 @@ export const globalChannels = sqliteTable(
   ],
 );
 
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
 // Type helpers
 export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
@@ -81,3 +86,4 @@ export type SessionChannel = typeof sessionChannels.$inferSelect;
 export type NewSessionChannel = typeof sessionChannels.$inferInsert;
 export type GlobalChannel = typeof globalChannels.$inferSelect;
 export type NewGlobalChannel = typeof globalChannels.$inferInsert;
+export type Setting = typeof settings.$inferSelect;

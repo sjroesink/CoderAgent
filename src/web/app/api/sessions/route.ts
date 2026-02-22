@@ -170,8 +170,12 @@ export async function POST(request: Request) {
           sessionId,
           gc.channelType,
           sessionManager.persistMessage.bind(sessionManager),
+          false, // Don't persist outgoing broadcasts; only the WebUI channel persists those
         );
         multiChannel.addChannel(persisting, gc.channelType, gc.systemInstruction);
+
+        // Persist the global channel in sessionChannels so it shows in the UI
+        await sessionManager.addSessionChannel(sessionId, gc.channelType as ChannelType);
       } catch (err: any) {
         console.error(`Failed to create channel ${gc.channelType}: ${err.message}`);
       }

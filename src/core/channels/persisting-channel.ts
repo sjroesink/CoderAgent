@@ -11,32 +11,48 @@ export type PersistFunc = (
 /**
  * Decorator that wraps an IChannel and persists every
  * sent/received message to the database via a callback.
+ *
+ * When `persistOutgoing` is false, only incoming (received) messages
+ * are persisted.  This prevents duplicate DB rows when multiple
+ * channels are attached to a MultiChannel – only the primary (WebUI)
+ * channel should persist outgoing broadcasts.
  */
 export class PersistingChannel implements IChannel {
   private inner: IChannel;
   private sessionId: string;
   private channelType: string;
   private persistFunc: PersistFunc;
+  private persistOutgoing: boolean;
 
   constructor(
     inner: IChannel,
     sessionId: string,
     channelType: string,
     persistFunc: PersistFunc,
+    persistOutgoing = true,
   ) {
     this.inner = inner;
     this.sessionId = sessionId;
     this.channelType = channelType;
     this.persistFunc = persistFunc;
+    this.persistOutgoing = persistOutgoing;
+  }
+
+  get innerChannel(): IChannel {
+    return this.inner;
   }
 
   async sendMessage(sender: string, message: string): Promise<void> {
-    await this.persistFunc(this.sessionId, this.channelType, sender, message, "Message");
+    if (this.persistOutgoing) {
+      await this.persistFunc(this.sessionId, this.channelType, sender, message, "Message");
+    }
     await this.inner.sendMessage(sender, message);
   }
 
   async sendStatus(status: string): Promise<void> {
-    await this.persistFunc(this.sessionId, this.channelType, "System", status, "Status");
+    if (this.persistOutgoing) {
+      await this.persistFunc(this.sessionId, this.channelType, "System", status, "Status");
+    }
     await this.inner.sendStatus(status);
   }
 
@@ -49,7 +65,9 @@ export class PersistingChannel implements IChannel {
   }
 
   async sendCompletion(summary: string): Promise<void> {
-    await this.persistFunc(this.sessionId, this.channelType, "System", summary, "Completion");
+    if (this.persistOutgoing) {
+      await this.persistFunc(this.sessionId, this.channelType, "System", summary, "Completion");
+    }
     await this.inner.sendCompletion(summary);
   }
 
